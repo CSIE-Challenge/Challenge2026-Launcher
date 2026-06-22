@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://bsege0jiswrmp"]
 
 [ext_resource type="Script" uid="uid://b4fqc3ea1p1wb" path="res://launcher.gd" id="1_4emaf"]
+[ext_resource type="VideoStream" uid="uid://bul7cga2dgrvp" path="res://yuanshou.ogv" id="2_cvfd6"]
 
 [node name="Launcher" type="Control" unique_id=557997936]
 layout_mode = 3
@@ -9,10 +10,27 @@ script = ExtResource("1_4emaf")
 
 [node name="HTTPRequest" type="HTTPRequest" parent="." unique_id=844408042]
 
-[node name="CenterContainer" type="CenterContainer" parent="." unique_id=642923475]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="LoadingScreen" type="Control" parent="." unique_id=1044349109]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="Label" type="Label" parent="CenterContainer" unique_id=854207234]
-layout_mode = 2
+[node name="VideoStreamPlayer" type="VideoStreamPlayer" parent="LoadingScreen" unique_id=1689551150]
+layout_mode = 1
+offset_right = 640.0
+offset_bottom = 360.0
+stream = ExtResource("2_cvfd6")
+autoplay = true
+expand = true
+loop = true
+
+[node name="Label" type="Label" parent="LoadingScreen" unique_id=854207234]
+layout_mode = 1
+offset_left = 25.0
+offset_top = 21.0
+offset_right = 305.0
+offset_bottom = 44.0
+horizontal_alignment = 1

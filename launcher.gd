@@ -14,7 +14,9 @@ var launch_retry_count := 0
 var asset_url := ""
 var agent_url := ""
 
-@onready var status_label := $CenterContainer/Label
+@onready var loading_screen := $LoadingScreen
+@onready var status_label := $LoadingScreen/Label
+@onready var video_player := $LoadingScreen/VideoStreamPlayer
 @onready var req := $HTTPRequest
 
 
@@ -24,6 +26,8 @@ func _message(message: String):
 
 
 func _ready():
+	video_player.size = get_viewport_rect().size
+	loading_screen.visible = true
 	var dir := DirAccess.open(".")
 	if not dir.dir_exists(SAVE_DIR):
 		dir.make_dir_recursive(SAVE_DIR)
