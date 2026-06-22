@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://bsege0jiswrmp"]
+
+[ext_resource type="Script" uid="uid://b4fqc3ea1p1wb" path="res://launcher.gd" id="1_4emaf"]
+
+[node name="Launcher" type="Control" unique_id=557997936]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_4emaf")
+
+[node name="HTTPRequest" type="HTTPRequest" parent="." unique_id=844408042]
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=642923475]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="CenterContainer" unique_id=854207234]
+layout_mode = 2
