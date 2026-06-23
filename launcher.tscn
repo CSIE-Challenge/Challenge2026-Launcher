@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bsege0jiswrmp"]
 
 [ext_resource type="Script" uid="uid://b4fqc3ea1p1wb" path="res://launcher.gd" id="1_4emaf"]
-[ext_resource type="VideoStream" uid="uid://bul7cga2dgrvp" path="res://yuanshou.ogv" id="2_cvfd6"]
+[ext_resource type="VideoStream" uid="uid://bul7cga2dgrvp" path="res://Videos/yuanshou.ogv" id="2_cvfd6"]
 
 [node name="Launcher" type="Control" unique_id=557997936]
 layout_mode = 3
@@ -25,7 +25,6 @@ offset_bottom = 360.0
 stream = ExtResource("2_cvfd6")
 autoplay = true
 expand = true
-loop = true
 
 [node name="Label" type="Label" parent="LoadingScreen" unique_id=854207234]
 layout_mode = 1

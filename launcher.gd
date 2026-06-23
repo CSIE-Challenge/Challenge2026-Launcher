@@ -7,6 +7,12 @@ const AGENT_ASSET_NAME := "agent.zip"
 const GAME_NAME := "Challenge2025"
 const MAX_RETRY := 1
 
+var videos: Array[VideoStream] = [
+	preload("res://Videos/yuanshou.ogv"),
+	preload("res://Videos/catlaugh.ogv"),
+	preload("res://Videos/catbonk.ogv")
+]
+var last_index := -1
 var version: String
 var executable_name: String
 var executable_path: String
@@ -27,6 +33,8 @@ func _message(message: String):
 
 func _ready():
 	video_player.size = get_viewport_rect().size
+	video_player.finished.connect(_play_random_video)
+	_play_random_video()
 	loading_screen.visible = true
 	var dir := DirAccess.open(".")
 	if not dir.dir_exists(SAVE_DIR):
@@ -34,6 +42,21 @@ func _ready():
 		_message("Created save directory: " + SAVE_DIR)
 
 	_fetch_latest_release()
+
+
+func _play_random_video():
+	if videos.is_empty():
+		return
+
+	var index := randi() % videos.size()
+
+	if videos.size() > 1:
+		while index == last_index:
+			index = randi() % videos.size()
+
+	last_index = index
+	video_player.stream = videos[index]
+	video_player.play()
 
 
 func _get_platform_suffix() -> String:
