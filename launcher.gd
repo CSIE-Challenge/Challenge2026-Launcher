@@ -10,7 +10,11 @@ const MAX_RETRY := 1
 var videos: Array[VideoStream] = [
 	preload("res://Videos/yuanshou.ogv"),
 	preload("res://Videos/catlaugh.ogv"),
-	preload("res://Videos/catbonk.ogv")
+	preload("res://Videos/catbonk.ogv"),
+	preload("res://Videos/chipichapa.ogv"),
+	preload("res://Videos/cathuh.ogv"),
+	preload("res://Videos/catdance.ogv"),
+	preload("res://Videos/catscream.ogv")
 ]
 var last_index := -1
 var version: String
