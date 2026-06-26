@@ -3,9 +3,9 @@ extends Control
 const GITHUB_API := "https://api.github.com/repos/CSIE-Challenge/Challenge2025/releases/latest"
 const SAVE_DIR := "GameBuilds"
 const AGENT_PATH := "GameBuilds/agent.zip"
+const AGENT_DIR := "GameBuilds/agent"
 const AGENT_ASSET_NAME := "agent.zip"
 const GAME_NAME := "Challenge2025"
-const MAX_RETRY := 1
 
 var videos: Array[VideoStream] = [
 	preload("res://Videos/yuanshou.ogv"),
@@ -20,9 +20,9 @@ var last_index := -1
 var version: String
 var executable_name: String
 var executable_path: String
-var launch_retry_count := 0
 var asset_url := ""
 var agent_url := ""
+var game_downloaded := false
 
 @onready var loading_screen := $LoadingScreen
 @onready var status_label := $LoadingScreen/Label
@@ -73,6 +73,30 @@ func _get_platform_suffix() -> String:
 	return ""
 
 
+## Release asset name for this platform's agent bundle, e.g. agent-linux-x86_64.zip.
+## Matches the PLATFORM_LABEL produced by Challenge2026/agent/build_agent_bundle.sh.
+func _get_agent_asset_name() -> String:
+	var os_label := ""
+	if OS.has_feature("windows"):
+		os_label = "windows"
+	elif OS.has_feature("linux"):
+		os_label = "linux"
+	elif OS.has_feature("macos"):
+		os_label = "macos"
+	else:
+		return ""
+
+	var arch := ""
+	if OS.has_feature("arm64"):
+		arch = "aarch64"
+	elif OS.has_feature("x86_64"):
+		arch = "x86_64"
+	else:
+		return ""
+
+	return "agent-%s-%s.zip" % [os_label, arch]
+
+
 func _get_existing_executable_name() -> String:
 	var dir := DirAccess.open(SAVE_DIR)
 	if dir == null:
@@ -96,10 +120,6 @@ func _delete_existing_executable(file_name: String):
 		_message("Deleted old version: " + file_name)
 
 
-func _get_download_path() -> String:
-	return SAVE_DIR + "/" + GAME_NAME + "_" + _get_platform_suffix()
-
-
 func _fetch_latest_release():
 	_message("Checking for updates...")
 	req.request_completed.connect(_on_fetch_completed)
@@ -121,24 +141,34 @@ func _on_fetch_completed(_result, response_code, _headers, body):
 	executable_name = "%s_%s_%s" % [version, GAME_NAME, _get_platform_suffix()]
 	executable_path = "%s/%s" % [SAVE_DIR, executable_name]
 
+	# Prefer the platform-specific agent bundle; fall back to a flat agent.zip
+	# (the Challenge2025 test release ships the latter).
+	var agent_asset_name := _get_agent_asset_name()
+	var agent_fallback_url := ""
 	for asset in data["assets"]:
-		if asset["name"] == AGENT_ASSET_NAME:
+		var asset_name = asset["name"]
+		if asset_name == agent_asset_name:
 			agent_url = asset["browser_download_url"]
-		elif asset["name"] == executable_name:
+		elif asset_name == AGENT_ASSET_NAME:
+			agent_fallback_url = asset["browser_download_url"]
+		elif asset_name == executable_name:
 			asset_url = asset["browser_download_url"]
+
+	if agent_url == "":
+		agent_url = agent_fallback_url
 
 	if asset_url == "":
 		_message("No matching asset found: " + executable_name)
 		return
 
 	if agent_url == "":
-		_message("No API found in release assets.")
+		_message("No agent bundle found in release assets.")
 		return
 
 	var existing = _get_existing_executable_name()
 	if existing == executable_name:
 		_message("You already have the latest version: " + version)
-		_launch_game()
+		_ensure_agent_bundle()
 	else:
 		if existing != "":
 			_delete_existing_executable(existing)
@@ -162,41 +192,83 @@ func _on_download_completed(_result, response_code, _headers, _body):
 		OS.execute("unzip", [executable_path])
 		OS.execute("mv", [GAME_NAME + ".app", SAVE_DIR])
 
+	game_downloaded = true
 	_message("Download complete")
+	_ensure_agent_bundle()
+
+
+# --- agent bundle -----------------------------------------------------------
+
+
+## Make sure the Python agent bundle is extracted, then start the session.
+## Re-downloads when the game was just updated or the bundle is missing.
+func _ensure_agent_bundle():
+	var have_bundle := FileAccess.file_exists(AGENT_DIR + "/runner.py")
+	if have_bundle and not game_downloaded:
+		_launch_game()
+		return
+	_download_agent()
+
+
+func _download_agent():
+	_message("Downloading agent bundle...")
+	req.download_file = AGENT_PATH
+	if req.request_completed.is_connected(_on_fetch_completed):
+		req.request_completed.disconnect(_on_fetch_completed)
+	if req.request_completed.is_connected(_on_download_completed):
+		req.request_completed.disconnect(_on_download_completed)
+	req.request_completed.connect(_on_agent_downloaded)
+	req.request(agent_url)
+
+
+func _on_agent_downloaded(_result, response_code, _headers, _body):
+	if response_code != 200:
+		_message("Agent download failed: " + str(response_code))
+		return
+
+	_message("Extracting agent bundle...")
+	DirAccess.make_dir_recursive_absolute(AGENT_DIR)
+	_extract_all_from_zip(AGENT_PATH, AGENT_DIR)
+	DirAccess.remove_absolute(AGENT_PATH)
+	_message("Agent bundle ready")
 	_launch_game()
 
 
-func _launch_game():
-	_message("Launching game with version: " + version)
+func _extract_all_from_zip(path: String, to: String) -> void:
+	var reader := ZIPReader.new()
+	reader.open(path)
+	var root := DirAccess.open(to)
+	for file_path in reader.get_files():
+		if file_path.ends_with("/"):
+			root.make_dir_recursive(file_path)
+			continue
+		root.make_dir_recursive(root.get_current_dir().path_join(file_path).get_base_dir())
+		var f := FileAccess.open(root.get_current_dir().path_join(file_path), FileAccess.WRITE)
+		f.store_buffer(reader.read_file(file_path))
+		f.close()
 
+
+# --- launch game ------------------------------------------------------------
+
+
+func _launch_game() -> void:
 	if not FileAccess.file_exists(executable_path):
-		_message("Executable not found at: " + executable_path)
+		_message("Game executable not found at: " + executable_path)
 		return
 
-	var app_path = executable_path
-
+	var app_path := executable_path
 	if OS.has_feature("macos"):
 		app_path = "%s/%s.app/Contents/MacOS/%s" % [SAVE_DIR, GAME_NAME, GAME_NAME]
 		OS.execute("xattr", ["-rd", "com.apple.quarantine", app_path])
-
 	if OS.has_feature("linux"):
 		OS.execute("chmod", ["+x", app_path])
 
-	var result := OS.execute(app_path, ["--version"])
-	print("Executable check result: ", result)
-
-	if result == 0:
-		OS.create_process(app_path, ["--quiet"])
-		_message("Game launched. Goodbye!")
-		get_tree().quit()
-	else:
-		if launch_retry_count < MAX_RETRY:
-			_message("Failed to launch game, will retry by redownloading...")
-			launch_retry_count += 1
-			_delete_existing_executable(executable_name)
-			_download_executable()
-		else:
-			_message("Failed to launch after retry. Error code: %d" % result)
+	# Engine args first; everything after `--` reaches OS.get_cmdline_user_args().
+	# AGENT_DIR is relative to our cwd, which the game inherits, so it resolves
+	# the same way on its side.
+	var args := ["--quiet", "--", "--agent-bundle", AGENT_DIR]
+	var pid := OS.create_process(app_path, args)
+	_message("Game launched (pid %d). You can close this launcher." % pid)
 
 
 func _on_exit_pressed() -> void:
