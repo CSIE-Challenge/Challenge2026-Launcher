@@ -21,4 +21,6 @@ config/icon="res://icon.svg"
 
 [rendering]
 
+; required to cross-export the macOS build from a Linux CI runner
+textures/vram_compression/import_etc2_astc=true
 rendering_device/driver.windows="d3d12"
