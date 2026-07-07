@@ -1,11 +1,10 @@
 extends Control
 
-const GITHUB_API := "https://api.github.com/repos/CSIE-Challenge/Challenge2025/releases/latest"
+const GITHUB_API := "https://api.github.com/repos/CSIE-Challenge/Challenge2026/releases/latest"
 const SAVE_DIR := "GameBuilds"
 const AGENT_PATH := "GameBuilds/agent.zip"
 const AGENT_DIR := "GameBuilds/agent"
-const AGENT_ASSET_NAME := "agent.zip"
-const GAME_NAME := "Challenge2025"
+const GAME_NAME := "Challenge2026"
 
 var videos: Array[VideoStream] = [
 	preload("res://Videos/yuanshou.ogv"),
@@ -141,21 +140,13 @@ func _on_fetch_completed(_result, response_code, _headers, body):
 	executable_name = "%s_%s_%s" % [version, GAME_NAME, _get_platform_suffix()]
 	executable_path = "%s/%s" % [SAVE_DIR, executable_name]
 
-	# Prefer the platform-specific agent bundle; fall back to a flat agent.zip
-	# (the Challenge2025 test release ships the latter).
 	var agent_asset_name := _get_agent_asset_name()
-	var agent_fallback_url := ""
 	for asset in data["assets"]:
 		var asset_name = asset["name"]
 		if asset_name == agent_asset_name:
 			agent_url = asset["browser_download_url"]
-		elif asset_name == AGENT_ASSET_NAME:
-			agent_fallback_url = asset["browser_download_url"]
 		elif asset_name == executable_name:
 			asset_url = asset["browser_download_url"]
-
-	if agent_url == "":
-		agent_url = agent_fallback_url
 
 	if asset_url == "":
 		_message("No matching asset found: " + executable_name)
@@ -205,6 +196,7 @@ func _on_download_completed(_result, response_code, _headers, _body):
 func _ensure_agent_bundle():
 	var have_bundle := FileAccess.file_exists(AGENT_DIR + "/runner.py")
 	if have_bundle and not game_downloaded:
+		_seed_player_agent()
 		_launch_game()
 		return
 	_download_agent()
@@ -230,8 +222,23 @@ func _on_agent_downloaded(_result, response_code, _headers, _body):
 	DirAccess.make_dir_recursive_absolute(AGENT_DIR)
 	_extract_all_from_zip(AGENT_PATH, AGENT_DIR)
 	DirAccess.remove_absolute(AGENT_PATH)
+	if not OS.has_feature("windows"):
+		OS.execute("chmod", ["-R", "+x", AGENT_DIR + "/python/bin"])
+	_seed_player_agent()
 	_message("Agent bundle ready")
 	_launch_game()
+
+
+## Seed the player's editable agent script where the game's file dialog opens
+## (<executable dir>/agent/scripts). scripts/ is not part of the bundle zip,
+## so updates never overwrite the player's edits.
+func _seed_player_agent() -> void:
+	var target := AGENT_DIR + "/scripts/agent.py"
+	if FileAccess.file_exists(target):
+		return
+	DirAccess.make_dir_recursive_absolute(AGENT_DIR + "/scripts")
+	DirAccess.copy_absolute(AGENT_DIR + "/agent.py", target)
+	_message("Created starter agent script: " + target)
 
 
 func _extract_all_from_zip(path: String, to: String) -> void:
@@ -268,7 +275,9 @@ func _launch_game() -> void:
 	# the same way on its side.
 	var args := ["--quiet", "--", "--agent-bundle", AGENT_DIR]
 	var pid := OS.create_process(app_path, args)
-	_message("Game launched (pid %d). You can close this launcher." % pid)
+	_message("Game launched (pid %d). Closing launcher..." % pid)
+	await get_tree().create_timer(1.5).timeout
+	get_tree().quit()
 
 
 func _on_exit_pressed() -> void:
