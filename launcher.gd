@@ -271,10 +271,9 @@ func _launch_game() -> void:
 		OS.execute("chmod", ["+x", app_path])
 
 	# Engine args first; everything after `--` reaches OS.get_cmdline_user_args().
-	# AGENT_DIR is relative to our cwd, which the game inherits, so it resolves
-	# the same way on its side.
-	var args := ["--quiet", "--", "--agent-bundle", AGENT_DIR]
-	var pid := OS.create_process(app_path, args)
+	var bundle_abs := DirAccess.open(".").get_current_dir().path_join(AGENT_DIR)
+	var args := ["--quiet", "--", "--agent-bundle", bundle_abs]
+	var pid := OS.create_process(app_path, args, true)
 	_message("Game launched (pid %d). Closing launcher..." % pid)
 	await get_tree().create_timer(1.5).timeout
 	get_tree().quit()
