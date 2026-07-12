@@ -47,18 +47,8 @@ func _get_base_dir() -> String:
 		if "AppTranslocation" in exec_path:
 			_message("ERROR: macOS has moved this app to a temporary read-only location.\nMove Launcher.app to /Applications (or ~/Applications) and open it from there.")
 			return ""
-		return exec_path.get_base_dir().get_base_dir().get_base_dir().get_base_dir()
+		return exec_path.get_base_dir().get_base_dir() + "/Resources"
 	return exec_path.get_base_dir()
-
-
-func _is_writable(path: String) -> bool:
-	var test := path + "/.write_test"
-	var f := FileAccess.open(test, FileAccess.WRITE)
-	if f == null:
-		return false
-	f.close()
-	DirAccess.remove_absolute(test)
-	return true
 
 
 func _ready():
@@ -70,10 +60,6 @@ func _ready():
 	base_dir = _get_base_dir()
 	if base_dir == "":
 		return
-
-	if not _is_writable(base_dir):
-		base_dir = ProjectSettings.globalize_path("user://")
-		_message("Using user data directory: " + base_dir)
 
 	save_dir = base_dir + "/GameBuilds"
 	agent_path = base_dir + "/agent.zip"
