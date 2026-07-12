@@ -4,4 +4,6 @@
 
 .vscode/
 GameBuilds/
+/agent/
+agent.zip
 export/

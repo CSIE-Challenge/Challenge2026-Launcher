@@ -2,8 +2,10 @@ extends Control
 
 const GITHUB_API := "https://api.github.com/repos/CSIE-Challenge/Challenge2026/releases/latest"
 const SAVE_DIR := "GameBuilds"
-const AGENT_PATH := "GameBuilds/agent.zip"
-const AGENT_DIR := "GameBuilds/agent"
+# The agent lives beside GameBuilds/, not inside it: GameBuilds/ is disposable
+# (wiped/replaced on updates) while agent/ holds the player's own scripts.
+const AGENT_PATH := "agent.zip"
+const AGENT_DIR := "agent"
 const GAME_NAME := "Challenge2026"
 
 var videos: Array[VideoStream] = [
@@ -22,6 +24,7 @@ var executable_path: String
 var asset_url := ""
 var agent_url := ""
 var game_downloaded := false
+var extract_thread: Thread
 
 @onready var loading_screen := $LoadingScreen
 @onready var status_label := $LoadingScreen/Label
@@ -219,18 +222,30 @@ func _on_agent_downloaded(_result, response_code, _headers, _body):
 		return
 
 	_message("Extracting agent bundle...")
+	# Extract on a worker thread so the loading video keeps playing.
+	extract_thread = Thread.new()
+	extract_thread.start(_extract_agent_bundle)
+
+
+## Runs on the worker thread; filesystem work only, no scene tree access.
+func _extract_agent_bundle() -> void:
 	DirAccess.make_dir_recursive_absolute(AGENT_DIR)
 	_extract_all_from_zip(AGENT_PATH, AGENT_DIR)
 	DirAccess.remove_absolute(AGENT_PATH)
 	if not OS.has_feature("windows"):
 		OS.execute("chmod", ["-R", "+x", AGENT_DIR + "/python/bin"])
+	_on_agent_extracted.call_deferred()
+
+
+func _on_agent_extracted() -> void:
+	extract_thread.wait_to_finish()
 	_seed_player_agent()
 	_message("Agent bundle ready")
 	_launch_game()
 
 
 ## Seed the player's editable agent script where the game's file dialog opens
-## (<executable dir>/agent/scripts). scripts/ is not part of the bundle zip,
+## (<launcher dir>/agent/scripts). scripts/ is not part of the bundle zip,
 ## so updates never overwrite the player's edits.
 func _seed_player_agent() -> void:
 	var target := AGENT_DIR + "/scripts/agent.py"
