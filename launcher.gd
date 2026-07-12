@@ -1,12 +1,14 @@
 extends Control
 
 const GITHUB_API := "https://api.github.com/repos/CSIE-Challenge/Challenge2026/releases/latest"
-const SAVE_DIR := "GameBuilds"
+const GAME_NAME := "Challenge2026"
+
+var base_dir: String
+var save_dir: String
 # The agent lives beside GameBuilds/, not inside it: GameBuilds/ is disposable
 # (wiped/replaced on updates) while agent/ holds the player's own scripts.
-const AGENT_PATH := "agent.zip"
-const AGENT_DIR := "agent"
-const GAME_NAME := "Challenge2026"
+var agent_path: String
+var agent_dir: String
 
 var videos: Array[VideoStream] = [
 	preload("res://Videos/yuanshou.ogv"),
@@ -37,15 +39,30 @@ func _message(message: String):
 	print(message)
 
 
+func _get_base_dir() -> String:
+	var exec_path := OS.get_executable_path()
+	if OS.has_feature("editor"):
+		return ProjectSettings.globalize_path("res://")
+	if OS.has_feature("macos") and ".app/Contents/MacOS" in exec_path:
+		return exec_path.get_base_dir().get_base_dir() + "/Resources"
+	return exec_path.get_base_dir()
+
+
 func _ready():
 	video_player.size = get_viewport_rect().size
 	video_player.finished.connect(_play_random_video)
 	_play_random_video()
 	loading_screen.visible = true
+
+	base_dir = _get_base_dir()
+	save_dir = base_dir + "/GameBuilds"
+	agent_path = base_dir + "/agent.zip"
+	agent_dir = base_dir + "/agent"
+
 	var dir := DirAccess.open(".")
-	if not dir.dir_exists(SAVE_DIR):
-		dir.make_dir_recursive(SAVE_DIR)
-		_message("Created save directory: " + SAVE_DIR)
+	if not dir.dir_exists(save_dir):
+		dir.make_dir_recursive(save_dir)
+		_message("Created save directory: " + save_dir)
 
 	_fetch_latest_release()
 
@@ -100,7 +117,7 @@ func _get_agent_asset_name() -> String:
 
 
 func _get_existing_executable_name() -> String:
-	var dir := DirAccess.open(SAVE_DIR)
+	var dir := DirAccess.open(save_dir)
 	if dir == null:
 		return ""
 
@@ -116,7 +133,7 @@ func _get_existing_executable_name() -> String:
 
 
 func _delete_existing_executable(file_name: String):
-	var full_path = SAVE_DIR + "/" + file_name
+	var full_path = save_dir + "/" + file_name
 	if FileAccess.file_exists(full_path):
 		DirAccess.remove_absolute(full_path)
 		_message("Deleted old version: " + file_name)
@@ -141,7 +158,7 @@ func _on_fetch_completed(_result, response_code, _headers, body):
 	var tag = data["tag_name"]
 	version = tag
 	executable_name = "%s_%s_%s" % [version, GAME_NAME, _get_platform_suffix()]
-	executable_path = "%s/%s" % [SAVE_DIR, executable_name]
+	executable_path = "%s/%s" % [save_dir, executable_name]
 
 	var agent_asset_name := _get_agent_asset_name()
 	for asset in data["assets"]:
@@ -183,8 +200,9 @@ func _on_download_completed(_result, response_code, _headers, _body):
 		return
 
 	if OS.has_feature("macos"):
-		OS.execute("unzip", [executable_path])
-		OS.execute("mv", [GAME_NAME + ".app", SAVE_DIR])
+		OS.execute("rm", ["-rf", save_dir + "/" + GAME_NAME + ".app"])
+		OS.execute("unzip", ["-o", executable_path, "-d", base_dir])
+		OS.execute("mv", [base_dir + "/" + GAME_NAME + ".app", save_dir])
 
 	game_downloaded = true
 	_message("Download complete")
@@ -197,7 +215,7 @@ func _on_download_completed(_result, response_code, _headers, _body):
 ## Make sure the Python agent bundle is extracted, then start the session.
 ## Re-downloads when the game was just updated or the bundle is missing.
 func _ensure_agent_bundle():
-	var have_bundle := FileAccess.file_exists(AGENT_DIR + "/runner.py")
+	var have_bundle := FileAccess.file_exists(agent_dir + "/runner.py")
 	if have_bundle and not game_downloaded:
 		_seed_player_agent()
 		_launch_game()
@@ -207,7 +225,7 @@ func _ensure_agent_bundle():
 
 func _download_agent():
 	_message("Downloading agent bundle...")
-	req.download_file = AGENT_PATH
+	req.download_file = agent_path
 	if req.request_completed.is_connected(_on_fetch_completed):
 		req.request_completed.disconnect(_on_fetch_completed)
 	if req.request_completed.is_connected(_on_download_completed):
@@ -229,11 +247,11 @@ func _on_agent_downloaded(_result, response_code, _headers, _body):
 
 ## Runs on the worker thread; filesystem work only, no scene tree access.
 func _extract_agent_bundle() -> void:
-	DirAccess.make_dir_recursive_absolute(AGENT_DIR)
-	_extract_all_from_zip(AGENT_PATH, AGENT_DIR)
-	DirAccess.remove_absolute(AGENT_PATH)
+	DirAccess.make_dir_recursive_absolute(agent_dir)
+	_extract_all_from_zip(agent_path, agent_dir)
+	DirAccess.remove_absolute(agent_path)
 	if not OS.has_feature("windows"):
-		OS.execute("chmod", ["-R", "+x", AGENT_DIR + "/python/bin"])
+		OS.execute("chmod", ["-R", "+x", agent_dir + "/python/bin"])
 	_on_agent_extracted.call_deferred()
 
 
@@ -248,11 +266,11 @@ func _on_agent_extracted() -> void:
 ## (<launcher dir>/agent/scripts). scripts/ is not part of the bundle zip,
 ## so updates never overwrite the player's edits.
 func _seed_player_agent() -> void:
-	var target := AGENT_DIR + "/scripts/agent.py"
+	var target := agent_dir + "/scripts/agent.py"
 	if FileAccess.file_exists(target):
 		return
-	DirAccess.make_dir_recursive_absolute(AGENT_DIR + "/scripts")
-	DirAccess.copy_absolute(AGENT_DIR + "/agent.py", target)
+	DirAccess.make_dir_recursive_absolute(agent_dir + "/scripts")
+	DirAccess.copy_absolute(agent_dir + "/agent.py", target)
 	_message("Created starter agent script: " + target)
 
 
@@ -274,20 +292,25 @@ func _extract_all_from_zip(path: String, to: String) -> void:
 
 
 func _launch_game() -> void:
-	if not FileAccess.file_exists(executable_path):
-		_message("Game executable not found at: " + executable_path)
-		return
-
 	var app_path := executable_path
 	if OS.has_feature("macos"):
-		app_path = "%s/%s.app/Contents/MacOS/%s" % [SAVE_DIR, GAME_NAME, GAME_NAME]
+		app_path = "%s/%s.app/Contents/MacOS/%s" % [save_dir, GAME_NAME, GAME_NAME]
+		if not FileAccess.file_exists(app_path) and FileAccess.file_exists(executable_path):
+			OS.execute("rm", ["-rf", save_dir + "/" + GAME_NAME + ".app"])
+			OS.execute("unzip", ["-o", executable_path, "-d", base_dir])
+			OS.execute("mv", [base_dir + "/" + GAME_NAME + ".app", save_dir])
+
+	if not FileAccess.file_exists(app_path):
+		_message("Game executable not found at: " + app_path)
+		return
+
+	if OS.has_feature("macos"):
 		OS.execute("xattr", ["-rd", "com.apple.quarantine", app_path])
 	if OS.has_feature("linux"):
 		OS.execute("chmod", ["+x", app_path])
 
 	# Engine args first; everything after `--` reaches OS.get_cmdline_user_args().
-	var bundle_abs := DirAccess.open(".").get_current_dir().path_join(AGENT_DIR)
-	var args := ["--quiet", "--", "--agent-bundle", bundle_abs]
+	var args := ["--quiet", "--", "--agent-bundle", agent_dir]
 	var pid := OS.create_process(app_path, args, true)
 	_message("Game launched (pid %d). Closing launcher..." % pid)
 	await get_tree().create_timer(1.5).timeout
