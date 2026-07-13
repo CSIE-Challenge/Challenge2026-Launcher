@@ -115,7 +115,10 @@ func _get_agent_asset_name() -> String:
 	if OS.has_feature("arm64"):
 		arch = "aarch64"
 	elif OS.has_feature("x86_64"):
-		arch = "x86_64"
+		if OS.has_feature("macos"):
+			arch = "aarch64"
+		else:
+			arch = "x86_64"
 	else:
 		return ""
 
