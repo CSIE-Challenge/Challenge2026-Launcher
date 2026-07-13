@@ -33,3 +33,10 @@ offset_top = 21.0
 offset_right = 305.0
 offset_bottom = 44.0
 horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="LoadingScreen" unique_id=2138611686]
+layout_mode = 0
+offset_left = 9.0
+offset_top = 605.0
+offset_right = 1152.0
+offset_bottom = 645.0
